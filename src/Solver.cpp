@@ -21,47 +21,41 @@ std::string Solver::find_ideal_word() {
     std::string best_word = "_____";
     for(auto &c : best_word){
         auto hist = local_stats.histogram();
-        bool found_char = false;
         for(size_t j = 0; j < hist.size(); ++j){
-
-            char g = hist[j].first;
-            if(!best_word.contains(g)){
-                if(hist[j].second == 0) {
-                    if(!found_char) continue;
+            char g = hist[j].first; //histogram entry with the highest occurrence
+            if(!best_word.contains(g)){ //try to avoid duplicates
+                if(hist[j].second == 0) { //when avoiding dupes is impossible, use highest char
                     j = 0;
                     g = hist[0].first;
-                }else{
-                    found_char = true;
                 }
                 if(local_stats.filter([g](const std::string &str){
                     return str.contains(g);
-                }) > 0){
+                }) >= 1){ //check if adding char results in at least one valid word
                     c = g;
                     break;
                 }
-
             }
         }
     }
 
-    return local_stats.valid_guess();
+    return local_stats.valid_guess(); //return one of the valid guesses
 }
 
 void Solver::filter_statistics(const std::string &response, const std::string &best_guess) {
     for(unsigned int i = 0; i < 5; ++i){
         size_t status;
         switch(response[i]){
-            break;case '2':
+            break;case '2': //Char is at correct location
                 status = stats.filter([&best_guess, &i](const std::string& str){
                     bool a = str[i] == best_guess[i];
                     return str[i] == best_guess[i];
                 });
-                break;case '1':
+                break;case '1': //Char is valid but at incorrect location
                 status = stats.filter([&best_guess, &i](const std::string& str){
                     bool a = str[i] != best_guess[i] && str.contains(best_guess[i]);
                     return str[i] != best_guess[i] && str.contains(best_guess[i]);
                 });
-                break;case '0':
+                break;case '0': //Char not in word
                 status = stats.filter([&best_guess, &i](const std::string& str){
                     bool a = !str.contains(best_guess[i]);
                     return !str.contains(best_guess[i]);
@@ -87,5 +81,25 @@ unsigned int Solver::solve(bool should_output){
 
         filter_statistics(response, best_guess);
     }
-
+    throw std::runtime_error("NumIterator overflowed");
 }
+
+void benchmark_solver(unsigned int num_iterations){
+
+    Histogram<unsigned int, unsigned int> histogram;
+
+#pragma omp parallel for // run iterations in parallel
+    for(unsigned int i = 0; i < num_iterations; ++i){
+        Game wordle;
+        Solver solver{wordle};
+        unsigned tmp = solver.solve(false);
+
+    #pragma omp critical
+        { //prevent race conditions
+        histogram.add(tmp, 1);
+        }
+    }
+    std::cout << histogram;
+}
+
+
